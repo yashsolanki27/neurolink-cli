@@ -1,0 +1,1 @@
+Explain what a REST API is in 2 sentences.
