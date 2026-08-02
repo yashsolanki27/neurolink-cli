@@ -8,6 +8,20 @@ from llm_client import LLMClient, LLMError
 
 st.set_page_config(page_title="NeuroLink", page_icon="🧠", layout="centered")
 
+MODELS = {
+    "NVIDIA Nemotron 3 Ultra 550B": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "NVIDIA Nemotron 3 Super 120B": "nvidia/nemotron-3-super-120b-a12b:free",
+    "Google Gemma 4 26B": "google/gemma-4-26b-a4b-it:free",
+}
+
+
+def default_model_label() -> str:
+    env_model = os.getenv("OPENROUTER_MODEL")
+    for label, model_id in MODELS.items():
+        if model_id == env_model:
+            return label
+    return next(iter(MODELS))
+
 
 def resolve_api_key() -> str | None:
     try:
@@ -48,7 +62,16 @@ history = client.history
 if st.session_state.get("last_error"):
     st.error(st.session_state["last_error"])
 
-st.sidebar.markdown(f"**Model:** `{client.model}`")
+options = list(MODELS)
+model_label = st.sidebar.selectbox(
+    "Model",
+    options,
+    index=options.index(default_model_label()),
+    key="model_select",
+)
+client.model = MODELS[model_label]
+
+st.sidebar.markdown(f"**Active:** `{client.model}`")
 st.sidebar.markdown(f"**Context:** ~{client.estimated_tokens()} tokens")
 
 if st.sidebar.button("Clear conversation", use_container_width=True):

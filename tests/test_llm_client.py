@@ -248,3 +248,15 @@ def test_ask_override_timeout():
     client = LLMClient(api_key="test-key", client=fake, max_retries=1)
     client.ask("hi", timeout=10)
     assert fake.chat.completions.calls[0]["timeout"] == 10
+
+
+def test_ask_sends_selected_model_to_api():
+    fake = FakeClient(_ok_response("hello"))
+    client = LLMClient(
+        api_key="test-key",
+        client=fake,
+        max_retries=1,
+        model="openai/gpt-oss-20b:free",
+    )
+    client.ask("hi")
+    assert fake.chat.completions.calls[0]["model"] == "openai/gpt-oss-20b:free"

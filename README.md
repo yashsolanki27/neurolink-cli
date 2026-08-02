@@ -3,9 +3,9 @@
 Free AI chat you can trust — bring your own OpenRouter API key. Web GUI only, no CLI.
 Requests go straight from your app to the model provider; NeuroLink stores nothing.
 
-**Scope:** current build is a hardened chat core (Streamlit). The next milestone turns
-NeuroLink into a **document-grounded knowledge assistant**: upload PDF/TXT, get answers
-that cite the exact chunks they came from.
+**Scope:** current build is a hardened chat core (Streamlit) with three selectable free
+models. The next milestone turns NeuroLink into a **document-grounded knowledge
+assistant**: upload PDF/TXT, get answers that cite the exact chunks they came from.
 
 ## Architecture
 
@@ -41,14 +41,15 @@ cp .env.example .env        # add your OPENROUTER_API_KEY
 uv run streamlit run src/app.py
 ```
 
-Get a free key at <https://openrouter.ai/settings/keys>. The default model is a free-tier
-OpenRouter model, so this costs nothing to run.
+Get a free key at <https://openrouter.ai/settings/keys>. The sidebar lets you switch
+between three free OpenRouter models (Nemotron 3 Ultra 550B, Nemotron 3 Super 120B,
+Gemma 4 26B), so this costs nothing to run.
 
 ### Configuration (`.env`)
 | Variable | Default | Purpose |
 |---|---|---|
 | `OPENROUTER_API_KEY` | — | Required. API key from OpenRouter |
-| `OPENROUTER_MODEL` | `google/gemma-4-26b-a4b-it:free` | Model ID served by OpenRouter |
+| `OPENROUTER_MODEL` | `nvidia/nemotron-3-ultra-550b-a55b:free` | Initial model in the GUI sidebar (3 free models are selectable) |
 | `LLM_MAX_RETRIES` | `4` | Retry attempts before surfacing an error |
 | `LLM_MAX_HISTORY_TOKENS` | `3000` | Rough context cap; oldest messages are trimmed |
 | `LLM_TIMEOUT` | `30` | Per-request timeout in seconds, before retries begin |

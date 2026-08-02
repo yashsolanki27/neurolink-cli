@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "google/gemma-4-26b-a4b-it:free"
+DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
 SYSTEM_PROMPT = (
     "You are NeuroLink, a helpful and honest assistant. "
     "Answer clearly and directly. If you are unsure or lack information, say so "

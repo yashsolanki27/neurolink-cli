@@ -76,3 +76,12 @@ def test_clear_conversation_empties_transcript():
     at.button[0].click().run()
     assert len(at.exception) == 0
     assert "hello" not in _markdown_text(at)
+
+
+def test_sidebar_offers_three_selectable_models():
+    at = _app(FakeLLMClient())
+    at.run()
+    assert len(at.exception) == 0
+    model_box = at.selectbox[0]
+    assert len(model_box.options) == 3
+    assert model_box.value == "NVIDIA Nemotron 3 Ultra 550B"
