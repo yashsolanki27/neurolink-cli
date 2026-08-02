@@ -1,29 +1,44 @@
-import os
 from llm_client import LLMClient
-from file_utils import read_prompt, save_response
+
+MODELS = [
+    "google/gemma-4-26b-a4b-it:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
+    "openai/gpt-oss-20b:free",
+    "inclusionai/ling-3.0-flash:free",
+]
+
+
+def choose_model():
+    print("Available models:")
+    for i, m in enumerate(MODELS, start=1):
+        print(f"{i}. {m}")
+    choice = input("Choose a model number (or press Enter for default): ")
+    if choice.strip().isdigit():
+        index = int(choice) - 1
+        if 0 <= index < len(MODELS):
+            return MODELS[index]
+    return MODELS[0]
 
 
 def run():
-    client = LLMClient()
+    model = choose_model()
+    client = LLMClient(model=model)
     print(f"Using: {client}")
+    print("Type 'bye' to exit.\n")
 
-    if os.path.exists("prompt.txt") and os.path.getsize("prompt.txt") > 0:
-        use_file = input("prompt.txt found. Use it? (y/n): ")
-        if use_file.lower() == "y":
-            prompt = read_prompt("prompt.txt")
+    while True:
+        prompt = input("You: ")
+
+        if prompt.strip().lower() == "bye":
+            print("Goodbye!")
+            break
+
+        result = client.ask(prompt)
+
+        if result:
+            print(f"AI: {result}\n")
         else:
-            prompt = input("Enter your prompt: ")
-    else:
-        prompt = input("Enter your prompt: ")
-
-    result = client.ask(prompt)
-
-    if result:
-        save_response("response.txt", result)
-        print("Response saved to response.txt")
-        print(result)
-    else:
-        print("No response received.")
+            print("No response received.\n")
 
 
 if __name__ == "__main__":
