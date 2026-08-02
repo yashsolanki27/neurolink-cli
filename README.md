@@ -21,11 +21,13 @@ tests/
   (system prompt + user/assistant turns), trims old turns when the rough token budget
   (`LLM_MAX_HISTORY_TOKENS`) is exceeded, and calls the model.
 - **Error handling is typed, not blanket.** `ask()` catches `openai.APITimeoutError`,
-  `openai.APIConnectionError`, `openai.RateLimitError`, and `openai.APIStatusError`
-  separately. Timeouts, connection failures, rate limits (429) and transient 5xx are
-  retried with exponential backoff (honoring the server's `Retry-After` header);
-  everything else (4xx, bad keys) fails fast as `LLMError`. All failures surface in the
-  GUI as a readable message, never a raw traceback.
+  `openai.APIConnectionError`, `openai.RateLimitError`, and   `openai.APIStatusError`
+  separately. Timeouts, connection failures, rate limits (429), transient 5xx, and
+  empty replies are retried with exponential backoff (honoring the server's
+  `Retry-After` header, capped at 30s); everything else (4xx, bad keys) fails fast as
+  `LLMError`. A failed `ask()` rolls back its pending user message, so history never
+  gets a dangling turn. All failures surface in the GUI as a readable message, never a
+  raw traceback.
 - **`app.py`** keeps the LLM client in `st.session_state` (one per browser session, never
   cached globally), so each user gets an isolated conversation.
 - **The API key never enters the codebase.** It is read from environment
@@ -54,11 +56,15 @@ OpenRouter model, so this costs nothing to run.
 1. Push this repo to GitHub.
 2. On <https://streamlit.io/cloud> → "New app" → pick the repo.
 3. Main file: `src/app.py`.
-4. Settings → Secrets: add `OPENROUTER_API_KEY=...` (same line format).
-5. Deploy. Your live URL is generated automatically.
+4. In **Advanced settings**, set **Python version** to `3.13`. Cloud ignores
+   `.python-version` and the default drifts (3.14+ in 2026), which can stall
+   `uv sync` mid-deploy. Then click **Save**.
+5. Settings → Secrets: add `OPENROUTER_API_KEY=...` (same line format).
+6. Deploy. Your live URL is generated automatically.
 
-Dependencies are managed by `uv` (`pyproject.toml` + `uv.lock`); Streamlit Cloud reads
-them from `pyproject.toml`.
+Dependencies are managed by `uv` (`pyproject.toml` + `uv.lock`); Streamlit Cloud
+installs them via `uv sync` from `uv.lock`, so keep it in sync with
+`uv lock`/`uv add` changes.
 
 ## Development
 ```bash
