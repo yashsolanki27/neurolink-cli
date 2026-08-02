@@ -6,8 +6,14 @@ dist/
 wheels/
 *.egg-info
 .env
+.env.local
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+htmlcov/
 
 # Virtual environments
 .venv
-response.txt
-
