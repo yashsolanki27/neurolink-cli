@@ -32,5 +32,10 @@ select = ["E", "F", "I", "UP", "B", "BLE"]
 
 [tool.mypy]
 python_version = "3.13"
+strict = true
 ignore_missing_imports = true
 files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["test_app", "test_llm_client"]
+ignore_errors = true

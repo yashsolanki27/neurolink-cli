@@ -2,6 +2,8 @@ import logging
 import os
 import random
 import time
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 import openai
@@ -31,6 +33,22 @@ class EmptyReplyError(LLMError):
     """Internal signal that the model returned no usable content; retryable."""
 
 
+def _parse_retry_after(value: str, now: datetime | None = None) -> float | None:
+    """Parse a ``Retry-After`` header, either seconds or an HTTP-date."""
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    try:
+        parsed = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed is None:
+        return None
+    now = now or datetime.now(UTC)
+    return max(0.0, (parsed - now).total_seconds())
+
+
 def _retry_delay(
     attempt: int, exc: BaseException, max_backoff: float = MAX_BACKOFF
 ) -> float:
@@ -38,12 +56,11 @@ def _retry_delay(
     headers = getattr(response, "headers", None) if response is not None else None
     if headers is not None:
         retry_after = headers.get("retry-after")
-        if retry_after is not None:
-            try:
-                return min(float(retry_after), max_backoff)
-            except (TypeError, ValueError):
-                pass
-    return min(2**attempt, max_backoff) * (0.5 + random.random() * 0.5)
+        if isinstance(retry_after, str):
+            seconds = _parse_retry_after(retry_after)
+            if seconds is not None:
+                return min(seconds, max_backoff)
+    return min(2.0**attempt, max_backoff) * (0.5 + random.random() * 0.5)
 
 
 class LLMClient:
@@ -86,6 +103,7 @@ class LLMClient:
             if max_history_tokens is None
             else max_history_tokens
         )
+        self.timeout = float(os.getenv("LLM_TIMEOUT", "30"))
         self.history: list[dict[str, str]] = [
             {"role": "system", "content": self.system_prompt}
         ]
@@ -104,10 +122,11 @@ class LLMClient:
         while len(self.history) > 2 and self.estimated_tokens() > self.max_history_tokens:
             del self.history[1]
 
-    def ask(self, prompt: str, timeout: float = 30.0) -> str:
+    def ask(self, prompt: str, timeout: float | None = None) -> str:
         if not prompt or not prompt.strip():
             raise LLMError("Empty prompt.")
 
+        request_timeout = self.timeout if timeout is None else timeout
         self.history.append({"role": "user", "content": prompt})
         self._trim_history()
 
@@ -118,7 +137,7 @@ class LLMClient:
                     response = self.client.chat.completions.create(
                         model=self.model,
                         messages=self.history,  # type: ignore[arg-type]  # dict is runtime-compatible with the SDK param types
-                        timeout=timeout,
+                        timeout=request_timeout,
                     )
                     if not response.choices:
                         raise EmptyReplyError("Model returned no choices.")

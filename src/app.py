@@ -1,4 +1,5 @@
 import os
+from typing import cast
 
 import streamlit as st
 from streamlit.errors import StreamlitAPIException
@@ -10,9 +11,10 @@ st.set_page_config(page_title="NeuroLink", page_icon="🧠", layout="centered")
 
 def resolve_api_key() -> str | None:
     try:
-        return st.secrets["OPENROUTER_API_KEY"]
+        key = st.secrets["OPENROUTER_API_KEY"]
     except (KeyError, StreamlitAPIException):
         return os.getenv("OPENROUTER_API_KEY")
+    return key if isinstance(key, str) else None
 
 
 def get_client() -> LLMClient | None:
@@ -22,7 +24,7 @@ def get_client() -> LLMClient | None:
         except LLMError as e:
             st.session_state.client = None
             st.session_state.setup_error = str(e)
-    return st.session_state.client
+    return cast(LLMClient | None, st.session_state.client)
 
 
 st.title("NeuroLink")

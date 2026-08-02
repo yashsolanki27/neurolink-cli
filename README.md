@@ -21,13 +21,13 @@ tests/
   (system prompt + user/assistant turns), trims old turns when the rough token budget
   (`LLM_MAX_HISTORY_TOKENS`) is exceeded, and calls the model.
 - **Error handling is typed, not blanket.** `ask()` catches `openai.APITimeoutError`,
-  `openai.APIConnectionError`, `openai.RateLimitError`, and   `openai.APIStatusError`
+  `openai.APIConnectionError`, `openai.RateLimitError`, and `openai.APIStatusError`
   separately. Timeouts, connection failures, rate limits (429), transient 5xx, and
   empty replies are retried with exponential backoff (honoring the server's
-  `Retry-After` header, capped at 30s); everything else (4xx, bad keys) fails fast as
-  `LLMError`. A failed `ask()` rolls back its pending user message, so history never
-  gets a dangling turn. All failures surface in the GUI as a readable message, never a
-  raw traceback.
+  `Retry-After` header, both seconds and HTTP-date, capped at 30s); everything else
+  (4xx, bad keys) fails fast as `LLMError`. A failed `ask()` rolls back its pending
+  user message, so history never gets a dangling turn. All failures surface in the
+  GUI as a readable message, never a raw traceback.
 - **`app.py`** keeps the LLM client in `st.session_state` (one per browser session, never
   cached globally), so each user gets an isolated conversation.
 - **The API key never enters the codebase.** It is read from environment
@@ -51,6 +51,24 @@ OpenRouter model, so this costs nothing to run.
 | `OPENROUTER_MODEL` | `google/gemma-4-26b-a4b-it:free` | Model ID served by OpenRouter |
 | `LLM_MAX_RETRIES` | `4` | Retry attempts before surfacing an error |
 | `LLM_MAX_HISTORY_TOKENS` | `3000` | Rough context cap; oldest messages are trimmed |
+| `LLM_TIMEOUT` | `30` | Per-request timeout in seconds, before retries begin |
+
+## Troubleshooting
+
+- **`OPENROUTER_API_KEY is not set` banner on startup.** Local: copy `.env.example` to
+  `.env` and add your key, then restart. Cloud: add `OPENROUTER_API_KEY` under
+  Settings → Secrets and let the app redeploy.
+- **"All 4 attempts failed … RateLimitError".** The free tier of the default model is
+  capped at **200 requests/day** with ~97% provider uptime, so 429s are common. Retries
+  are automatic; the banner simply means the quota was hit harder than the retries could
+  absorb. Wait and try again, or raise `LLM_MAX_RETRIES`.
+- **A message sent and then vanished with a red banner.** That is the failure path by
+  design: the pending message is rolled back (so it never pollutes context) and the error
+  is shown above the chat until your next message.
+- **Nothing renders, deploy stuck "in the oven".** You likely deployed on a Python
+  version the dependencies lack wheels for; set **Python 3.13** in Advanced settings
+  (see below).
+
 
 ## Deploy to Streamlit Cloud (free)
 1. Push this repo to GitHub.
@@ -68,9 +86,10 @@ installs them via `uv sync` from `uv.lock`, so keep it in sync with
 
 ## Development
 ```bash
+uv sync --group dev
 uv run ruff check src tests
-uv run mypy
-uv run pytest
+uv run mypy            # strict mode for src
+uv run pytest          # 27 tests: client unit tests + AppTest GUI flow tests
 ```
 
 ## License

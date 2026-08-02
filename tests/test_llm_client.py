@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
 from types import SimpleNamespace
 from unittest import mock
 
@@ -218,3 +220,31 @@ def test_sdk_builtin_retries_disabled(monkeypatch):
     assert captured["max_retries"] == 0
     assert captured["api_key"] == "test-key"
     assert client.ask("hi") == "hello"
+
+
+def test_retry_after_http_date_is_parsed():
+    future = datetime.now(UTC) + timedelta(seconds=5)
+    exc = _api_error(429, headers={"retry-after": format_datetime(future)})
+    delay = llm_client._retry_delay(1, exc)
+    assert 4.0 <= delay <= 5.0
+
+
+def test_retry_after_invalid_falls_back_to_backoff():
+    exc = _api_error(429, headers={"retry-after": "garbage"})
+    delay = llm_client._retry_delay(1, exc)
+    assert 0.5 <= delay <= 30.0
+
+
+def test_default_timeout_read_from_env(monkeypatch):
+    fake = FakeClient(_ok_response())
+    monkeypatch.setenv("LLM_TIMEOUT", "45")
+    client = LLMClient(api_key="test-key", client=fake, max_retries=1)
+    client.ask("hi")
+    assert fake.chat.completions.calls[0]["timeout"] == 45
+
+
+def test_ask_override_timeout():
+    fake = FakeClient(_ok_response())
+    client = LLMClient(api_key="test-key", client=fake, max_retries=1)
+    client.ask("hi", timeout=10)
+    assert fake.chat.completions.calls[0]["timeout"] == 10

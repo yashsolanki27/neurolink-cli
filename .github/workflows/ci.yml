@@ -13,7 +13,8 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.13"
-      - run: uv sync --group dev
+          cache-dependency-path: uv.lock
+      - run: uv sync --group dev --frozen
       - run: uv run ruff check src tests
       - run: uv run mypy
       - run: uv run pytest
