@@ -15,7 +15,7 @@ def resolve_api_key() -> str | None:
         return os.getenv("OPENROUTER_API_KEY")
 
 
-def get_client() -> LLMClient:
+def get_client() -> LLMClient | None:
     if "client" not in st.session_state:
         try:
             st.session_state.client = LLMClient(api_key=resolve_api_key())
@@ -28,8 +28,12 @@ def get_client() -> LLMClient:
 st.title("NeuroLink")
 st.caption("Free AI chat — your API key, your conversation, nothing saved by us.")
 
-setup_error = getattr(st.session_state, "setup_error", None)
-if setup_error:
+client = get_client()
+
+if client is None:
+    setup_error = getattr(
+        st.session_state, "setup_error", "Failed to initialize the model client."
+    )
     st.error(setup_error)
     st.info(
         "**Setup for local dev:** `cp .env.example .env` → add your key, then "
@@ -37,14 +41,17 @@ if setup_error:
     )
     st.stop()
 
-client = get_client()
 history = client.history
+
+if st.session_state.get("last_error"):
+    st.error(st.session_state["last_error"])
 
 st.sidebar.markdown(f"**Model:** `{client.model}`")
 st.sidebar.markdown(f"**Context:** ~{client.estimated_tokens()} tokens")
 
 if st.sidebar.button("Clear conversation", use_container_width=True):
     client.reset()
+    st.session_state.pop("last_error", None)
     st.rerun()
 
 for msg in history[1:]:
@@ -58,7 +65,8 @@ if prompt:
         with st.spinner("Thinking..."):
             try:
                 reply = client.ask(prompt)
+                st.session_state.pop("last_error", None)
                 st.write(reply)
             except LLMError as e:
-                st.error(str(e))
+                st.session_state["last_error"] = str(e)
     st.rerun()

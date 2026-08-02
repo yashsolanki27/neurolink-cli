@@ -128,3 +128,93 @@ def test_missing_api_key_raises(monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     with pytest.raises(LLMError):
         LLMClient(api_key=None, client=FakeClient(_ok_response()))
+
+
+def test_failed_ask_rolls_back_user_message(monkeypatch):
+    fake = FakeClient(_api_error(400))
+    monkeypatch.setattr(llm_client.time, "sleep", mock.Mock())
+    client = LLMClient(api_key="test-key", client=fake, max_retries=3)
+    with pytest.raises(LLMError):
+        client.ask("first")
+    assert client.history == [{"role": "system", "content": client.system_prompt}]
+
+    client.client = FakeClient(_ok_response("hello"))
+    assert client.ask("second") == "hello"
+    assert [m["role"] for m in client.history] == ["system", "user", "assistant"]
+
+
+def test_retry_exhaustion_rolls_back_user_message(monkeypatch):
+    fake = FakeClient(_api_error(429))
+    monkeypatch.setattr(llm_client.time, "sleep", mock.Mock())
+    client = LLMClient(api_key="test-key", client=fake, max_retries=2)
+    with pytest.raises(LLMError):
+        client.ask("hi")
+    assert client.history == [{"role": "system", "content": client.system_prompt}]
+
+
+def test_empty_reply_is_retried(monkeypatch):
+    fake = FakeClient([_ok_response(reply=""), _ok_response(reply="hello")])
+    monkeypatch.setattr(llm_client.time, "sleep", mock.Mock())
+    client = LLMClient(api_key="test-key", client=fake, max_retries=3)
+
+    assert client.ask("hi") == "hello"
+    assert len(fake.chat.completions.calls) == 2
+
+
+def test_persistently_empty_reply_raises(monkeypatch):
+    fake = FakeClient(_ok_response(reply=""))
+    monkeypatch.setattr(llm_client.time, "sleep", mock.Mock())
+    client = LLMClient(api_key="test-key", client=fake, max_retries=2)
+
+    with pytest.raises(LLMError):
+        client.ask("hi")
+    assert len(fake.chat.completions.calls) == 2
+    assert client.history == [{"role": "system", "content": client.system_prompt}]
+
+
+def test_empty_choices_is_retried(monkeypatch):
+    fake = FakeClient([SimpleNamespace(choices=[]), _ok_response("hello")])
+    monkeypatch.setattr(llm_client.time, "sleep", mock.Mock())
+    client = LLMClient(api_key="test-key", client=fake, max_retries=3)
+
+    assert client.ask("hi") == "hello"
+    assert len(fake.chat.completions.calls) == 2
+
+
+def test_zero_max_retries_fails_immediately(monkeypatch):
+    fake = FakeClient(_api_error(429))
+    monkeypatch.setattr(llm_client.time, "sleep", mock.Mock())
+    client = LLMClient(api_key="test-key", client=fake, max_retries=0)
+
+    with pytest.raises(LLMError):
+        client.ask("hi")
+    assert len(fake.chat.completions.calls) == 0
+    assert client.history == [{"role": "system", "content": client.system_prompt}]
+
+
+def test_retry_after_is_capped():
+    exc = _api_error(429, headers={"retry-after": "999999"})
+    assert llm_client._retry_delay(1, exc) <= 30.0
+
+
+def test_malformed_retry_after_falls_back_to_backoff():
+    exc = _api_error(429, headers={"retry-after": "not-a-number"})
+    delay = llm_client._retry_delay(1, exc)
+    assert 0.5 <= delay <= 30.0
+
+
+def test_sdk_builtin_retries_disabled(monkeypatch):
+    captured = {}
+
+    def fake_openai(**kwargs):
+        captured.update(kwargs)
+        return FakeClient(_ok_response("hello"))
+
+    monkeypatch.setattr(llm_client.openai, "OpenAI", fake_openai)
+    monkeypatch.setattr(llm_client, "load_dotenv", lambda *a, **k: None)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+    client = LLMClient()
+    assert captured["max_retries"] == 0
+    assert captured["api_key"] == "test-key"
+    assert client.ask("hi") == "hello"
